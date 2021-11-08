@@ -1,14 +1,11 @@
+from builtins import print
+
 import PySimpleGUI as sg
 import chess
 import config as cf
 import timeit
 from operator import itemgetter
 import random
-# piece = {""}
-move_visited = 0
-# score = 0
-board = chess.Board()
-present_score = 0
 
 class GUI:
 
@@ -133,11 +130,14 @@ class Game:
                                       to_square=chess.square(event[1], event[0]))
                 if board.is_legal(move):
                     print("-------HUMAN--------")
-                    global present_score
+                    global present_score, present_hash
                     score = bot.calculate_score(move)
+                    hash = bot.calculate_hash(move)
                     present_score += score
+                    present_hash ^= hash
                     board.push(move)
-                    print("Score:", bot.evaluated(board), present_score)
+                    print("Score:", present_score)
+                    print("Hash:", present_hash)
                     print(move)
                     # print("Hash:", bot.hash(board))
                     gui.update_board(window)
@@ -157,44 +157,102 @@ class Game:
 
     def bot_turn(self):
         print("--------BOT---------")
-        global present_score
-        global move_visited
+        global present_score, zob, move_visited, present_hash
         move_visited = 0
+        zob = 0
 
         start = timeit.default_timer()
-        best_move = bot.min(board, 0, -800010)
+        bot.d.clear()
+        best_move = bot.iterative_deepening(4)
         end = timeit.default_timer()
         print("Time: ", end-start)
         score = bot.calculate_score(best_move)
+        hash = bot.calculate_hash(best_move)
         present_score += score
+        present_hash ^= hash
         board.push(best_move)
         gui.update_board(window)
         self.is_human_turn = True
-        # print("Hash:", bot.hash(board))
+        print("Kich thuoc map:", len(bot.d))
+        print("Hash:", present_hash)
+        print("Node hit:", zob)
         print("Move visited:", move_visited)
-        print("Score:", bot.evaluated(board), present_score)
+        print("Score:", present_score)
         print(best_move)
 
 class Bot:
 
-    MAX_DEPTH = 5
+    MAX_DEPTH = 4
     table = []
+    # score of board searched
+    d = dict()
+    # list of move that should be search first
+    good_move = dict()
+
 
     def init_zobrist(self):
+        check = []
         for i in range(12):
             self.table.append([])
         for i in range(12):
             for j in range(64):
-                self.table[i].append(random.randrange(1000000))
+                rand_num = random.randrange(10000000)
+                while rand_num in check:
+                    rand_num = random.randrange(10000000)
+                check.append(rand_num)
+                self.table[i].append(rand_num)
 
-    def hash(self, board: chess.Board):
+    def get_hash(self, board: chess.Board):
         h = 0
         for i in range(64):
             if board.piece_at(i) != None:
                 h = h ^ self.table[cf.piece[board.piece_at(i).symbol()]][i]
+        h = h ^ board.turn
         return h
 
-    def get_score(self, piece : chess.Piece, pos):
+    def calculate_hash(self, move: chess.Move):
+        hash = 0
+        from_square = move.from_square
+        to_square = move.to_square
+        piece_at_from_square = board.piece_at(from_square)
+        piece_at_to_square = board.piece_at(to_square)
+
+        # Nhap thanh
+        if (piece_at_from_square.piece_type == chess.KING) & (abs(from_square - to_square) in range(2, 5)):
+            if from_square > to_square:
+                hash = hash ^ self.table[cf.piece[piece_at_from_square.symbol()]][from_square]
+                hash = hash ^ self.table[cf.piece[piece_at_from_square.symbol()]][from_square - 2]
+                hash = hash ^ self.table[cf.piece[board.piece_at(from_square - 4).symbol()]][from_square - 4]
+                hash = hash ^ self.table[cf.piece[board.piece_at(from_square - 4).symbol()]][from_square - 1]
+            else:
+                hash = hash ^ self.table[cf.piece[piece_at_from_square.symbol()]][from_square]
+                hash = hash ^ self.table[cf.piece[piece_at_from_square.symbol()]][from_square + 2]
+                hash = hash ^ self.table[cf.piece[board.piece_at(from_square + 3).symbol()]][from_square + 3]
+                hash = hash ^ self.table[cf.piece[board.piece_at(from_square + 3).symbol()]][from_square + 1]
+        # Phong
+        elif (piece_at_from_square.piece_type == chess.PAWN) & ((to_square in range(56, 64)) or (to_square in range(0, 8))):
+            hash = hash ^ self.table[cf.piece[piece_at_from_square.symbol()]][from_square]
+            if (piece_at_to_square != None):
+                hash = hash ^ self.table[cf.piece[piece_at_to_square.symbol()]][to_square]
+            hash = hash ^ self.table[cf.piece[chess.Piece(piece_type=move.promotion, color=piece_at_from_square.color).symbol()]][to_square]
+        # An tot qua duong
+        elif (piece_at_from_square.piece_type == chess.PAWN) & (abs(from_square-to_square) in [7, 9]) & (piece_at_to_square == None):
+            hash = hash ^ self.table[cf.piece[piece_at_from_square.symbol()]][from_square]
+            hash = hash ^ self.table[cf.piece[piece_at_from_square.symbol()]][to_square]
+            if to_square > from_square:
+                hash = hash ^ self.table[cf.piece[board.piece_at(to_square-8).symbol()]][to_square - 8]
+            else:
+                hash = hash ^ self.table[cf.piece[board.piece_at(to_square+8).symbol()]][to_square + 8]
+        else:
+            hash = hash ^ self.table[cf.piece[piece_at_from_square.symbol()]][from_square]
+            hash = hash ^ self.table[cf.piece[piece_at_from_square.symbol()]][to_square]
+            if piece_at_to_square != None:
+                hash = hash ^ self.table[cf.piece[piece_at_to_square.symbol()]][to_square]
+
+        return hash ^ piece_at_from_square.color ^ (not piece_at_from_square.color)
+
+
+    def get_piece_score(self, piece : chess.Piece, pos):
         if piece == None:
             return 0
         symbol = piece.symbol().lower()
@@ -216,37 +274,53 @@ class Bot:
         # Nhap thanh
         if (piece_at_from_square.piece_type == chess.KING) & (abs(from_square-to_square) in range(2, 5)):
             if from_square > to_square:
-                score -= self.get_score(piece_at_from_square, from_square)
-                score += self.get_score(piece_at_from_square, from_square - 2)
-                score -= self.get_score(board.piece_at(from_square-4), from_square - 4)
-                score += self.get_score(board.piece_at(from_square-4), from_square - 1)
+                score -= self.get_piece_score(piece_at_from_square, from_square)
+                score += self.get_piece_score(piece_at_from_square, from_square - 2)
+                score -= self.get_piece_score(board.piece_at(from_square-4), from_square - 4)
+                score += self.get_piece_score(board.piece_at(from_square-4), from_square - 1)
             else:
-                score -= self.get_score(piece_at_from_square, from_square)
-                score += self.get_score(piece_at_from_square, from_square + 2)
-                score -= self.get_score(board.piece_at(from_square + 3), from_square + 3)
-                score += self.get_score(board.piece_at(from_square + 3), from_square + 1)
+                score -= self.get_piece_score(piece_at_from_square, from_square)
+                score += self.get_piece_score(piece_at_from_square, from_square + 2)
+                score -= self.get_piece_score(board.piece_at(from_square + 3), from_square + 3)
+                score += self.get_piece_score(board.piece_at(from_square + 3), from_square + 1)
         # Phong
         elif (piece_at_from_square.piece_type == chess.PAWN) & ((to_square in range(56, 64)) or (to_square in range(0, 8))):
-            score -= self.get_score(piece_at_from_square, from_square)
-            score -= self.get_score(piece_at_to_square, to_square)
-            score += self.get_score(chess.Piece(piece_type=move.promotion, color=piece_at_from_square.color), to_square)
+            score -= self.get_piece_score(piece_at_from_square, from_square)
+            score -= self.get_piece_score(piece_at_to_square, to_square)
+            score += self.get_piece_score(chess.Piece(piece_type=move.promotion, color=piece_at_from_square.color), to_square)
+        # An tot qua duong
+        elif (piece_at_from_square.piece_type == chess.PAWN) & (abs(from_square - to_square) in [7, 9]) & (piece_at_to_square == None):
+            score -= self.get_piece_score(piece_at_from_square, from_square)
+            score += self.get_piece_score(piece_at_from_square, to_square)
+            if to_square > from_square:
+                score -= self.get_piece_score(board.piece_at(to_square - 8), to_square - 8)
+            else:
+                score -= self.get_piece_score(board.piece_at(to_square + 8), to_square + 8)
         else:
-            score -= self.get_score(piece_at_from_square, from_square)
-            score += self.get_score(piece_at_from_square, to_square)
-            score -= self.get_score(piece_at_to_square, to_square)
+            score -= self.get_piece_score(piece_at_from_square, from_square)
+            score += self.get_piece_score(piece_at_from_square, to_square)
+            score -= self.get_piece_score(piece_at_to_square, to_square)
 
         return score
 
-    def evaluated(self, board):
+    def get_score(self, board):
         score = 0
         for i in range(8):
             for j in range(8):
                 pos = i*8+j
-                score += self.get_score(board.piece_at(pos), pos)
+                score += self.get_piece_score(board.piece_at(pos), pos)
         return score
 
-    def max(self, board, depth, beta):
-        global present_score
+    def iterative_deepening(self, max_depth):
+        for depth in range(5, 6):
+            self.MAX_DEPTH = depth
+            print(self.MAX_DEPTH)
+            best_move = self.min(0, -800010)
+            self.d.clear()
+        return best_move
+
+    def max(self, depth, beta):
+        global present_score, zob, present_hash
         anpha = -800000
         global move_visited
         if board.legal_moves.count() == 0:
@@ -254,37 +328,57 @@ class Bot:
                 return anpha-1
             else:
                 return 0
-        if (depth == self.MAX_DEPTH):
+        if depth == self.MAX_DEPTH:
             return present_score
+
+        # if (present_hash != self.get_hash(board)) or (present_score != self.get_score(board)):
+        #     print("ngu")
+
+        v = self.d.get(present_hash)
+        if v != None:
+            zob = zob + 1
+            return v
+
         possibleMove = board.legal_moves
         # sort by score of move
         move_list = []
         for m in possibleMove:
             move = chess.Move.from_uci(str(m))
             temp_score = self.calculate_score(move)
-            move_list.append((temp_score, move))
+            temp_hash = self.calculate_hash(move)
+            move_list.append((temp_score, temp_hash, move))
+
         move_list.sort(key=itemgetter(0), reverse=True)
 
         for move in move_list:
-            # move = chess.Move.from_uci(str(m))
             temp_score = move[0]
+            temp_hash = move[1]
             present_score += temp_score
-            board.push(move[1])
+            present_hash ^= temp_hash
+            board.push(move[2])
             move_visited = move_visited + 1
-            score = self.min(board, depth+1, anpha)
+
+            score = self.min(depth + 1, anpha)
 
             board.pop()
             present_score -= temp_score
+            present_hash ^= temp_hash
             if  score >= beta:
+                self.d[present_hash] = score
                 return score
             if score > anpha:
+                # self.good_move[present_hash].append((temp_score, temp_hash, move))
                 anpha = score
-                best_move = move[1]
+                best_move = move[2]
+
+        # self.good_move.__reversed__()
         if depth == 0: return best_move
+
+        self.d[present_hash] = anpha
         return anpha
 
-    def min(self, board, depth, anpha):
-        global present_score
+    def min(self, depth, anpha):
+        global present_score, zob, present_hash
         beta = 800000
         global move_visited
         if board.legal_moves.count() == 0:
@@ -292,8 +386,16 @@ class Bot:
                 return beta+1
             else:
                 return 0
-        if (depth == self.MAX_DEPTH):
+        if depth == self.MAX_DEPTH:
             return present_score
+
+        # if (present_hash != self.get_hash(board)) or (present_score != self.get_score(board)):
+        #     print("ngu")
+
+        v = self.d.get(present_hash)
+        if v != None:
+            zob = zob + 1
+            return v
 
         possibleMove = board.legal_moves
         # sort by score of move
@@ -301,25 +403,35 @@ class Bot:
         for m in possibleMove:
             move = chess.Move.from_uci(str(m))
             temp_score = self.calculate_score(move)
-            move_list.append((temp_score, move))
+            temp_hash = self.calculate_hash(move)
+            move_list.append((temp_score, temp_hash, move))
         move_list.sort(key=itemgetter(0), reverse=False)
 
         for move in move_list:
-            # move = chess.Move.from_uci(str(m))
             temp_score = move[0]
-            board.push(move[1])
+            temp_hash = move[1]
+            board.push(move[2])
             present_score += temp_score
+            present_hash ^= temp_hash
             move_visited = move_visited + 1
-            score = self.max(board, depth+1, beta)
+
+            score = self.max(depth + 1, beta)
             board.pop()
             present_score -= temp_score
+            present_hash ^= temp_hash
             if score <= anpha:
+                self.d[present_hash] = score
                 return score
             if score < beta:
+                # self.good_move[present_hash].append((temp_score, temp_hash, move))
+                # if depth == 0:
+                #     print(move)
                 beta = score
-                best_move = move[1]
+                best_move = move[2]
 
         if depth == 0: return best_move
+
+        self.d[present_hash] = beta
         return beta
 
 #MAIN
@@ -327,7 +439,13 @@ gui = GUI()
 game = Game(is_human_turn=True)
 bot = Bot()
 
+board = chess.Board()
+move_visited = 0
+present_score = 0
 bot.init_zobrist()
+present_hash = bot.get_hash(board)
+zob = 0
+
 board_layout = gui.create_board_layout()
 window = sg.Window("Chess", board_layout, margins=(0,0))
 

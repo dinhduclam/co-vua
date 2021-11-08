@@ -162,8 +162,8 @@ class Game:
         zob = 0
 
         start = timeit.default_timer()
-        bot.d.clear()
-        best_move = bot.min(board, 0, -800010)
+        # bot.d.clear()
+        best_move = bot.iterative_deepening(6)
         end = timeit.default_timer()
         print("Time: ", end-start)
         score = bot.calculate_score(best_move)
@@ -182,9 +182,13 @@ class Game:
 
 class Bot:
 
-    MAX_DEPTH = 4
+    MAX_DEPTH = 3
     table = []
+    # score of board searched
     d = dict()
+    recent_use = dict()
+    # list of move that should be search first
+    good_move = dict()
 
 
     def init_zobrist(self):
@@ -215,7 +219,6 @@ class Bot:
         piece_at_from_square = board.piece_at(from_square)
         piece_at_to_square = board.piece_at(to_square)
 
-        score = 0
         # Nhap thanh
         if (piece_at_from_square.piece_type == chess.KING) & (abs(from_square - to_square) in range(2, 5)):
             if from_square > to_square:
@@ -310,7 +313,21 @@ class Bot:
                 score += self.get_piece_score(board.piece_at(pos), pos)
         return score
 
-    def max(self, board, depth, beta):
+    def iterative_deepening(self, max_depth=6):
+        for depth in range(2, max_depth+1):
+            self.MAX_DEPTH = depth
+            # print(self.MAX_DEPTH)
+            best_move = self.min(0, -800010)
+            print(depth, self.good_move[present_hash], best_move)
+            print(len(self.d), len(self.recent_use))
+            # self.d.clear()
+            # self.d.
+        self.d = self.recent_use.copy()
+        self.recent_use.clear()
+
+        return best_move
+
+    def max(self, depth, beta):
         global present_score, zob, present_hash
         anpha = -800000
         global move_visited
@@ -327,21 +344,37 @@ class Bot:
 
         v = self.d.get(present_hash)
         if v != None:
-            zob = zob + 1
-            return v
+            if v[1] >= self.MAX_DEPTH - depth:
+                self.recent_use[present_hash] = v
+                zob = zob + 1
+                return v[0]
+            else:
+                self.d.pop(present_hash)
 
-        possibleMove = board.legal_moves
-        # sort by score of move
-        move_list = []
-        for m in possibleMove:
-            move = chess.Move.from_uci(str(m))
-            temp_score = self.calculate_score(move)
-            temp_hash = self.calculate_hash(move)
-            move_list.append((temp_score, temp_hash, move))
+        better_move = self.good_move.get(present_hash)
+        if better_move == None or self.MAX_DEPTH < 5:
+            better_move = []
+            possibleMove = board.legal_moves
+            # sort by score of move
+            move_list = []
+            for m in possibleMove:
+                move = chess.Move.from_uci(str(m))
+                temp_score = self.calculate_score(move)
+                temp_hash = self.calculate_hash(move)
+                move_list.append((temp_score, temp_hash, move))
 
-        move_list.sort(key=itemgetter(0), reverse=True)
-        best_move = move_list.__getitem__(0)[2]
-        for move in move_list:
+            move_list.sort(key=itemgetter(0), reverse=True)
+
+            for move in move_list:
+                better_move.append(move)
+
+        better_move = better_move.copy()
+
+
+
+        self.good_move[present_hash] = []
+
+        for move in better_move:
             temp_score = move[0]
             temp_hash = move[1]
             present_score += temp_score
@@ -349,24 +382,28 @@ class Bot:
             board.push(move[2])
             move_visited = move_visited + 1
 
-            score = self.min(board, depth + 1, anpha)
+            score = self.min(depth + 1, anpha)
 
             board.pop()
             present_score -= temp_score
             present_hash ^= temp_hash
             if  score >= beta:
-                self.d[present_hash] = score
+                self.d[present_hash] = (score, self.MAX_DEPTH - depth)
+                self.recent_use[present_hash] = (score, self.MAX_DEPTH - depth)
                 return score
             if score > anpha:
+                self.good_move[present_hash].append(move)
                 anpha = score
                 best_move = move[2]
 
+        self.good_move[present_hash].reverse()
         if depth == 0: return best_move
 
-        self.d[present_hash] = anpha
+        self.d[present_hash] = (anpha, self.MAX_DEPTH - depth)
+        self.recent_use[present_hash] = (anpha, self.MAX_DEPTH - depth)
         return anpha
 
-    def min(self, board, depth, anpha):
+    def min(self, depth, anpha):
         global present_score, zob, present_hash
         beta = 800000
         global move_visited
@@ -383,20 +420,36 @@ class Bot:
 
         v = self.d.get(present_hash)
         if v != None:
-            zob = zob + 1
-            return v
+            if v[1] >= self.MAX_DEPTH - depth:
+                self.recent_use[present_hash] = v
+                self.recent_use[present_hash] = v
+                zob = zob + 1
+                # if depth == 0: return self.good_move[present_hash]
+                return v[0]
+            else: self.d.pop(present_hash)
 
-        possibleMove = board.legal_moves
-        # sort by score of move
-        move_list = []
-        for m in possibleMove:
-            move = chess.Move.from_uci(str(m))
-            temp_score = self.calculate_score(move)
-            temp_hash = self.calculate_hash(move)
-            move_list.append((temp_score, temp_hash, move))
-        move_list.sort(key=itemgetter(0), reverse=False)
-        best_move = move_list.__getitem__(0)[2]
-        for move in move_list:
+        better_move = self.good_move.get(present_hash)
+        if better_move == None or self.MAX_DEPTH < 5:
+            better_move = []
+            possibleMove = board.legal_moves
+            # sort by score of move
+            move_list = []
+            for m in possibleMove:
+                move = chess.Move.from_uci(str(m))
+                temp_score = self.calculate_score(move)
+                temp_hash = self.calculate_hash(move)
+                move_list.append((temp_score, temp_hash, move))
+
+            move_list.sort(key=itemgetter(0), reverse=False)
+
+            for move in move_list:
+                better_move.append(move)
+
+        better_move = better_move.copy()
+
+        self.good_move[present_hash] = []
+
+        for move in better_move:
             temp_score = move[0]
             temp_hash = move[1]
             board.push(move[2])
@@ -404,20 +457,26 @@ class Bot:
             present_hash ^= temp_hash
             move_visited = move_visited + 1
 
-            score = self.max(board, depth + 1, beta)
+            score = self.max(depth + 1, beta)
             board.pop()
             present_score -= temp_score
             present_hash ^= temp_hash
             if score <= anpha:
-                self.d[present_hash] = score
+                self.d[present_hash] = (score, self.MAX_DEPTH - depth)
+                self.recent_use[present_hash] = (score, self.MAX_DEPTH - depth)
                 return score
             if score < beta:
+                self.good_move[present_hash].append(move)
+                # if depth == 0:
+                #     print(move)
                 beta = score
                 best_move = move[2]
 
-        if depth == 0: return best_move
+        self.good_move[present_hash].reverse()
 
-        self.d[present_hash] = beta
+        if depth == 0: return best_move
+        self.recent_use[present_hash] = (beta, self.MAX_DEPTH - depth)
+        self.d[present_hash] = (beta, self.MAX_DEPTH - depth)
         return beta
 
 #MAIN
