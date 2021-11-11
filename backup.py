@@ -157,13 +157,13 @@ class Game:
 
     def bot_turn(self):
         print("--------BOT---------")
-        global present_score, zob, move_visited, present_hash
+        global present_score, hit, move_visited, present_hash
         move_visited = 0
-        zob = 0
+        hit = 0
 
         start = timeit.default_timer()
-        bot.d.clear()
-        best_move = bot.iterative_deepening(4)
+        # bot.d.clear()
+        best_move = bot.iterative_deepening()
         end = timeit.default_timer()
         print("Time: ", end-start)
         score = bot.calculate_score(best_move)
@@ -173,9 +173,9 @@ class Game:
         board.push(best_move)
         gui.update_board(window)
         self.is_human_turn = True
-        print("Kich thuoc map:", len(bot.d))
+        print("Kich thuoc Transposision table:", len(bot.transpos_table))
         print("Hash:", present_hash)
-        print("Node hit:", zob)
+        print("Node hit:", hit)
         print("Move visited:", move_visited)
         print("Score:", present_score)
         print(best_move)
@@ -185,9 +185,10 @@ class Bot:
     MAX_DEPTH = 4
     table = []
     # score of board searched
-    d = dict()
+    transpos_table = dict()
+    recent_use = dict()
     # list of move that should be search first
-    good_move = dict()
+    pv_move = dict()
 
 
     def init_zobrist(self):
@@ -196,9 +197,10 @@ class Bot:
             self.table.append([])
         for i in range(12):
             for j in range(64):
-                rand_num = random.randrange(10000000)
+
+                rand_num = random.randrange(1<<64 - 1)
                 while rand_num in check:
-                    rand_num = random.randrange(10000000)
+                    rand_num = random.randrange(1<<64 - 1)
                 check.append(rand_num)
                 self.table[i].append(rand_num)
 
@@ -250,7 +252,6 @@ class Bot:
                 hash = hash ^ self.table[cf.piece[piece_at_to_square.symbol()]][to_square]
 
         return hash ^ piece_at_from_square.color ^ (not piece_at_from_square.color)
-
 
     def get_piece_score(self, piece : chess.Piece, pos):
         if piece == None:
@@ -311,33 +312,52 @@ class Bot:
                 score += self.get_piece_score(board.piece_at(pos), pos)
         return score
 
-    def iterative_deepening(self, max_depth):
-        for depth in range(5, 6):
+    def iterative_deepening(self, max_depth=5):
+        for depth in range(2, max_depth+1):
             self.MAX_DEPTH = depth
-            print(self.MAX_DEPTH)
-            best_move = self.min(0, -800010)
-            self.d.clear()
+            # print(self.MAX_DEPTH)
+            best_move = self.minimax(0, -800010, 800010, isMaxPlayer=False)
+            # print(depth, self.pv_move[present_hash])
         return best_move
 
-    def max(self, depth, beta):
-        global present_score, zob, present_hash
-        anpha = -800000
-        global move_visited
+    def minimax(self, depth, alpha, beta, isMaxPlayer:bool):
+        global present_score, hit, present_hash, move_visited
+
         if board.legal_moves.count() == 0:
             if board.is_checkmate():
-                return anpha-1
+                if isMaxPlayer:
+                    return -800010
+                else:
+                    return 800010
             else:
                 return 0
+
         if depth == self.MAX_DEPTH:
             return present_score
 
-        # if (present_hash != self.get_hash(board)) or (present_score != self.get_score(board)):
-        #     print("ngu")
+        better_move = []
+        value = self.transpos_table.get(present_hash)
+        if value != None:
+            if value[1] >= self.MAX_DEPTH - depth:
+                hit = hit + 1
+                if depth == 0:
+                    return self.pv_move[present_hash][0]
+                else:
+                    return value[0]
+            # else:
+                # self.transpos_table.pop(present_hash)
+                # better_move = self.pv_move[present_hash].copy()
 
-        v = self.d.get(present_hash)
-        if v != None:
-            zob = zob + 1
-            return v
+        for move in better_move:
+            if not board.is_legal(move[2]):
+                print("DEPTH = ", depth)
+                print(present_hash, self.get_hash(board))
+                print(present_score, self.get_score(board))
+                print(better_move)
+                print(board.legal_moves)
+                print(board)
+                print(self.calculate_score(move[2]), self.calculate_hash(move[2]))
+                break
 
         possibleMove = board.legal_moves
         # sort by score of move
@@ -348,91 +368,63 @@ class Bot:
             temp_hash = self.calculate_hash(move)
             move_list.append((temp_score, temp_hash, move))
 
-        move_list.sort(key=itemgetter(0), reverse=True)
+        move_list.sort(key=itemgetter(0), reverse=isMaxPlayer)
 
         for move in move_list:
+            better_move.append(move)
+
+        if isMaxPlayer:
+            alpha = -800000
+        else:
+            beta = 800000
+
+        self.pv_move[present_hash] = []
+
+        for move in better_move:
             temp_score = move[0]
             temp_hash = move[1]
+            board.push(move[2])
+
             present_score += temp_score
             present_hash ^= temp_hash
-            board.push(move[2])
             move_visited = move_visited + 1
 
-            score = self.min(depth + 1, anpha)
+            score = self.minimax(depth + 1, alpha, beta, not isMaxPlayer)
 
             board.pop()
             present_score -= temp_score
             present_hash ^= temp_hash
-            if  score >= beta:
-                self.d[present_hash] = score
-                return score
-            if score > anpha:
-                # self.good_move[present_hash].append((temp_score, temp_hash, move))
-                anpha = score
-                best_move = move[2]
 
-        # self.good_move.__reversed__()
-        if depth == 0: return best_move
-
-        self.d[present_hash] = anpha
-        return anpha
-
-    def min(self, depth, anpha):
-        global present_score, zob, present_hash
-        beta = 800000
-        global move_visited
-        if board.legal_moves.count() == 0:
-            if board.is_checkmate():
-                return beta+1
+            if not isMaxPlayer:
+                if score < beta:
+                    beta = score
+                    best_move = move[2]
+                    self.pv_move[present_hash].append(move)
+                if score <= alpha:
+                    self.transpos_table[present_hash] = (score, self.MAX_DEPTH - depth)
+                    if len(self.pv_move[present_hash]) == 0: self.pv_move[present_hash].append(move)
+                    self.pv_move[present_hash].reverse()
+                    return score
             else:
-                return 0
-        if depth == self.MAX_DEPTH:
-            return present_score
+                if score > alpha:
+                    alpha = score
+                    best_move = move[2]
+                    self.pv_move[present_hash].append(move)
+                if score >= beta:
+                    self.transpos_table[present_hash] = (score, self.MAX_DEPTH - depth)
+                    if len(self.pv_move[present_hash]) == 0: self.pv_move[present_hash].append(move)
+                    self.pv_move[present_hash].reverse()
+                    return score
 
-        # if (present_hash != self.get_hash(board)) or (present_score != self.get_score(board)):
-        #     print("ngu")
-
-        v = self.d.get(present_hash)
-        if v != None:
-            zob = zob + 1
-            return v
-
-        possibleMove = board.legal_moves
-        # sort by score of move
-        move_list = []
-        for m in possibleMove:
-            move = chess.Move.from_uci(str(m))
-            temp_score = self.calculate_score(move)
-            temp_hash = self.calculate_hash(move)
-            move_list.append((temp_score, temp_hash, move))
-        move_list.sort(key=itemgetter(0), reverse=False)
-
-        for move in move_list:
-            temp_score = move[0]
-            temp_hash = move[1]
-            board.push(move[2])
-            present_score += temp_score
-            present_hash ^= temp_hash
-            move_visited = move_visited + 1
-
-            score = self.max(depth + 1, beta)
-            board.pop()
-            present_score -= temp_score
-            present_hash ^= temp_hash
-            if score <= anpha:
-                self.d[present_hash] = score
-                return score
-            if score < beta:
-                # self.good_move[present_hash].append((temp_score, temp_hash, move))
-                # if depth == 0:
-                #     print(move)
-                beta = score
-                best_move = move[2]
+        self.pv_move[present_hash].reverse()
 
         if depth == 0: return best_move
-
-        self.d[present_hash] = beta
-        return beta
+        if isMaxPlayer:
+            self.transpos_table[present_hash] = (alpha, self.MAX_DEPTH - depth)
+            return alpha
+        else:
+            self.transpos_table[present_hash] = (beta, self.MAX_DEPTH - depth)
+            return beta
 
 #MAIN
 gui = GUI()
@@ -444,7 +436,7 @@ move_visited = 0
 present_score = 0
 bot.init_zobrist()
 present_hash = bot.get_hash(board)
-zob = 0
+hit = 0
 
 board_layout = gui.create_board_layout()
 window = sg.Window("Chess", board_layout, margins=(0,0))
