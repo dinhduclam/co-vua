@@ -312,7 +312,7 @@ class Bot:
                 score += self.get_piece_score(board.piece_at(pos), pos)
         return score
 
-    def iterative_deepening(self, max_depth=5):
+    def iterative_deepening(self, max_depth=4):
         for depth in range(2, max_depth+1):
             self.MAX_DEPTH = depth
             # print(self.MAX_DEPTH)
@@ -344,9 +344,9 @@ class Bot:
                     return self.pv_move[present_hash][0]
                 else:
                     return value[0]
-            # else:
-                # self.transpos_table.pop(present_hash)
-                # better_move = self.pv_move[present_hash].copy()
+            else:
+            #     self.transpos_table.pop(present_hash)
+                better_move = self.pv_move[present_hash].copy()
 
         for move in better_move:
             if not board.is_legal(move[2]):
