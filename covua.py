@@ -73,6 +73,16 @@ class Game:
     def piece_at(self, pos):
         return board.piece_type_at(pos[0] * 8 + pos[1])
 
+    def calc_piece_quantity(self):
+        global board
+        piece_quantity = 0
+        for i in range(8):
+            for j in range(8):
+                if board.piece_type_at(i*8+j) != None:
+                    piece_quantity += 1
+        # print(piece_quantity)
+        return piece_quantity
+
     def play(self, event):
         if self.is_human_turn: self.human_turn(event)
 
@@ -81,8 +91,12 @@ class Game:
                 if board.is_checkmate(): print("You Win!")
                 else: print("Draw!")
                 return
-
+            print("Piece quantity: ", game.calc_piece_quantity())
+            if game.calc_piece_quantity() == 7 or game.calc_piece_quantity() == 8:
+                cf.piece_position_score['k'] = cf.piece_position_score['k_e']
+                print("New:", cf.piece_position_score['k'])
             self.bot_turn()
+            print(board.fen())
 
             if board.legal_moves.count() == 0:
                 if board.is_checkmate(): print("You Lose!")
@@ -161,11 +175,8 @@ class Game:
         move_visited = 0
         hit = 0
 
-        start = timeit.default_timer()
         # bot.d.clear()
         best_move = bot.iterative_deepening()
-        end = timeit.default_timer()
-        print("Time: ", end-start)
         score = bot.calculate_score(best_move)
         hash = bot.calculate_hash(best_move)
         present_score += score
@@ -313,11 +324,25 @@ class Bot:
         return score
 
     def iterative_deepening(self, max_depth=4):
+
+        # if game.calc_piece_quantity() < 5:
+        #     max_depth = 4
+
+
+        start = timeit.default_timer()
+
         for depth in range(2, max_depth+1):
             self.MAX_DEPTH = depth
-            # print(self.MAX_DEPTH)
-            best_move = self.minimax(0, -800010, 800010, isMaxPlayer=False)
-            # print(depth, self.pv_move[present_hash])
+            best_move = self.minimax(0, -800011, 800011, isMaxPlayer=False)
+
+        # end = timeit.default_timer()
+
+        # if end - start <= 2:
+
+
+        end = timeit.default_timer()
+        print("Time: ", end - start)
+
         return best_move
 
     def minimax(self, depth, alpha, beta, isMaxPlayer:bool):
@@ -341,23 +366,12 @@ class Bot:
             if value[1] >= self.MAX_DEPTH - depth:
                 hit = hit + 1
                 if depth == 0:
-                    return self.pv_move[present_hash][0]
+                    return self.pv_move[present_hash][0][2]
                 else:
                     return value[0]
             else:
             #     self.transpos_table.pop(present_hash)
                 better_move = self.pv_move[present_hash].copy()
-
-        for move in better_move:
-            if not board.is_legal(move[2]):
-                print("DEPTH = ", depth)
-                print(present_hash, self.get_hash(board))
-                print(present_score, self.get_score(board))
-                print(better_move)
-                print(board.legal_moves)
-                print(board)
-                print(self.calculate_score(move[2]), self.calculate_hash(move[2]))
-                break
 
         possibleMove = board.legal_moves
         # sort by score of move
@@ -431,9 +445,9 @@ gui = GUI()
 game = Game(is_human_turn=True)
 bot = Bot()
 
-board = chess.Board()
+board = chess.Board(fen = "8/Bp6/8/2N5/8/r7/4kP1P/5RK1 w - - 0 30")
 move_visited = 0
-present_score = 0
+present_score = bot.get_score(board)
 bot.init_zobrist()
 present_hash = bot.get_hash(board)
 hit = 0
