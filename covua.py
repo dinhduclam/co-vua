@@ -332,6 +332,8 @@ class Bot:
 
         start = timeit.default_timer()
 
+        best_move = list(board.legal_moves)[0]
+
         for depth in range(2, max_depth+1):
             self.MAX_DEPTH = depth
             best_move = self.minimax(0, -800011, 800011, isMaxPlayer=False)
