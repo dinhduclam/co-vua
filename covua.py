@@ -61,6 +61,33 @@ class GUI:
             color = cf.light_color
         window[position].update(button_color=color)
 
+    def choose_piece_promotion(self):
+        choose_layout = []
+        row = []
+        pie_choosed = 5
+        for i in range(2, 6):
+            row.append(sg.Button('', image_filename=cf.PIECE_PROMOTION[i-2], size=(1, 1),
+                                          border_width=0, button_color=cf.light_color,
+                                          pad=(0, 0), key=i))
+        choose_layout.append(row)
+        choose_window = sg.Window("Choose Piece to Promotion", choose_layout)
+        e, v = choose_window.read()
+        if (e == sg.WIN_CLOSED):
+            pie_choosed = 5
+        else:
+            pie_choosed = e
+
+        choose_window.close()
+        return pie_choosed
+
+    def message(self, mess):
+        mess_layout = []
+        text_mess = [sg.Text(text=mess, pad=(30, 20))]
+        mess_layout.append(text_mess)
+        mess_window = sg.Window(mess, mess_layout)
+        e, v = mess_window.read()
+        if (e == sg.WIN_CLOSED):
+            mess_window.close()
 class Game:
     is_human_turn = True
     selected = False
@@ -88,8 +115,8 @@ class Game:
 
         if not self.is_human_turn:
             if board.legal_moves.count() == 0:
-                if board.is_checkmate(): print("You Win!")
-                else: print("Draw!")
+                if board.is_checkmate(): gui.message("You Win!")
+                else: gui.message("Draw!")
                 return
             print("Piece quantity: ", game.calc_piece_quantity())
             if game.calc_piece_quantity() == 7 or game.calc_piece_quantity() == 8:
@@ -99,28 +126,9 @@ class Game:
             print(board.fen())
 
             if board.legal_moves.count() == 0:
-                if board.is_checkmate(): print("You Lose!")
-                else: print("Draw!")
+                if board.is_checkmate(): gui.message("You Lose!")
+                else: gui.message("Draw!")
                 return
-
-    def choose_piece_promotion(self):
-        choose_layout = []
-        row = []
-        pie_choosed = 5
-        for i in range(2, 6):
-            row.append(sg.Button('', image_filename=cf.PIECE_PROMOTION[i-2], size=(1, 1),
-                                          border_width=0, button_color=cf.light_color,
-                                          pad=(0, 0), key=i))
-        choose_layout.append(row)
-        choose_window = sg.Window("Choose Piece to Promotion", choose_layout)
-        e, v = choose_window.read()
-        if (e == sg.WIN_CLOSED):
-            pie_choosed = 5
-        else:
-            pie_choosed = e
-
-        choose_window.close()
-        return pie_choosed
 
     def human_turn(self, event):
         if (not self.selected) and self.piece_at(event) != None:
@@ -135,7 +143,7 @@ class Game:
                                       to_square=chess.square(event[1], event[0]),
                                       promotion=chess.QUEEN)
                     if board.is_legal(move):
-                        promo = self.choose_piece_promotion()
+                        promo = gui.choose_piece_promotion()
                         move = chess.Move(from_square=chess.square(self.position[1], self.position[0]),
                                           to_square=chess.square(event[1], event[0]),
                                           promotion=int(promo))
@@ -484,7 +492,8 @@ game = Game(is_human_turn=True)
 bot = Bot()
 
 
-board = chess.Board(fen="2k4q/P7/8/8/4K3/8/8/5Q2 w - - 1 56")
+board = chess.Board(fen="8/2Q5/k2K4/8/8/8/8/8 w - - 3 70")
+# 2k4q/P7/8/8/4K3/8/8/5Q2 w - - 1 56
 move_visited = 0
 present_score = bot.get_score(board)
 bot.init_zobrist()
