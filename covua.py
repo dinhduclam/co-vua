@@ -193,14 +193,13 @@ class Game:
 
 class Bot:
 
-    MAX_DEPTH = 4
+    MAX_DEPTH = 0
     table = []
     # score of board searched
     transpos_table = dict()
     recent_use = dict()
     # list of move that should be search first
     pv_move = dict()
-
 
     def init_zobrist(self):
         check = []
@@ -276,7 +275,7 @@ class Bot:
         else:
             return -(cf.piece_score[symbol] + cf.piece_position_score[symbol][row][col])
 
-    def calculate_score(self, move:chess.Move):
+    def calculate_score_normal(self, move:chess.Move):
         from_square = move.from_square
         to_square = move.to_square
         piece_at_from_square = board.piece_at(from_square)
@@ -325,20 +324,17 @@ class Bot:
 
     def iterative_deepening(self, max_depth=4):
 
-        # if game.calc_piece_quantity() < 5:
-        #     max_depth = 4
-
+        if game.calc_piece_quantity() < 5:
+            max_depth = 6
+            self.calculate_score = self.calculate_score_normal
+        else:
+            self.calculate_score = self.calculate_score_normal
 
         start = timeit.default_timer()
 
         for depth in range(2, max_depth+1):
             self.MAX_DEPTH = depth
             best_move = self.minimax(0, -800011, 800011, isMaxPlayer=False)
-
-        # end = timeit.default_timer()
-
-        # if end - start <= 2:
-
 
         end = timeit.default_timer()
         print("Time: ", end - start)
@@ -388,12 +384,12 @@ class Bot:
             better_move.append(move)
 
         if isMaxPlayer:
-            alpha = -800000
+            alpha = -800011
         else:
-            beta = 800000
+            beta = 800011
 
         self.pv_move[present_hash] = []
-
+        best_move = better_move[0]
         for move in better_move:
             temp_score = move[0]
             temp_hash = move[1]
@@ -440,12 +436,15 @@ class Bot:
             self.transpos_table[present_hash] = (beta, self.MAX_DEPTH - depth)
             return beta
 
+    calculate_score = calculate_score_normal
+
 #MAIN
 gui = GUI()
 game = Game(is_human_turn=True)
 bot = Bot()
 
-board = chess.Board(fen = "8/Bp6/8/2N5/8/r7/4kP1P/5RK1 w - - 0 30")
+
+board = chess.Board(fen = "8/8/3k4/8/4Q3/6N1/7K/5R2 w - - 3 41")
 move_visited = 0
 present_score = bot.get_score(board)
 bot.init_zobrist()
