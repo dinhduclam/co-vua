@@ -177,6 +177,7 @@ class Game:
 
         # bot.d.clear()
         best_move = bot.iterative_deepening()
+        print(best_move)
         score = bot.calculate_score(best_move)
         hash = bot.calculate_hash(best_move)
         present_score += score
@@ -275,6 +276,16 @@ class Bot:
         else:
             return -(cf.piece_score[symbol] + cf.piece_position_score[symbol][row][col])
 
+    def get_piece_score_without_position(self, piece : chess.Piece):
+        if piece == None:
+            return 0
+        symbol = piece.symbol().lower()
+        color = piece.color
+        if color:  # color = WHITE
+            return cf.piece_score[symbol]
+        else:
+            return -cf.piece_score[symbol]
+
     def calculate_score_normal(self, move:chess.Move):
         from_square = move.from_square
         to_square = move.to_square
@@ -314,6 +325,30 @@ class Bot:
 
         return score
 
+    def calculate_score_last_game(self, move:chess.Move):
+        from_square = move.from_square
+        to_square = move.to_square
+        piece_at_from_square = board.piece_at(from_square)
+        piece_at_to_square = board.piece_at(to_square)
+        king_pos = 0
+        for i in range(64):
+            if board.piece_type_at(i) == chess.KING:
+                if board.piece_at(i).color != piece_at_from_square.color:
+                    king_pos = i
+                    break
+
+        x_from = int(from_square/8)
+        y_from = from_square%8
+        x_to = int(to_square/8)
+        y_to = to_square % 8
+        x_king = int(king_pos/8)
+        y_king = king_pos%8
+        prev_score = abs(x_from - x_king) + abs(y_from - y_king)
+        score = abs(x_to - x_king) + abs(y_to - y_king)
+        if piece_at_from_square.color == True: value = 300
+        else: value = -300
+        return int((14 - (score - prev_score))*value/14) - self.get_piece_score_without_position(piece_at_to_square)
+
     def get_score(self, board):
         score = 0
         for i in range(8):
@@ -322,17 +357,17 @@ class Bot:
                 score += self.get_piece_score(board.piece_at(pos), pos)
         return score
 
-    def iterative_deepening(self, max_depth=4):
+    def iterative_deepening(self):
+        max_depth = 4
+        if game.calc_piece_quantity() < 7:
+            cf.piece_position_score['k'] = cf.piece_position_score['k_e']
 
         if game.calc_piece_quantity() < 5:
-            max_depth = 6
-            self.calculate_score = self.calculate_score_normal
+            self.calculate_score = self.calculate_score_last_game
         else:
             self.calculate_score = self.calculate_score_normal
 
         start = timeit.default_timer()
-
-        best_move = list(board.legal_moves)[0]
 
         for depth in range(2, max_depth+1):
             self.MAX_DEPTH = depth
@@ -340,7 +375,10 @@ class Bot:
 
         end = timeit.default_timer()
         print("Time: ", end - start)
-
+        # if best_move instanceof: print(1)
+        # else: print(2)
+        if (type(best_move) is chess.Move) == False: return list(board.legal_moves)[0]
+        if not board.is_legal(best_move): return list(board.legal_moves)[0]
         return best_move
 
     def minimax(self, depth, alpha, beta, isMaxPlayer:bool):
@@ -386,12 +424,12 @@ class Bot:
             better_move.append(move)
 
         if isMaxPlayer:
-            alpha = -800011
+            alpha = -800010
         else:
-            beta = 800011
+            beta = 800010
 
         self.pv_move[present_hash] = []
-        best_move = better_move[0]
+        best_move = better_move[0][2]
         for move in better_move:
             temp_score = move[0]
             temp_hash = move[1]
@@ -416,7 +454,7 @@ class Bot:
                     self.transpos_table[present_hash] = (score, self.MAX_DEPTH - depth)
                     if len(self.pv_move[present_hash]) == 0: self.pv_move[present_hash].append(move)
                     self.pv_move[present_hash].reverse()
-                    return score
+                    if depth > 0: return score
             else:
                 if score > alpha:
                     alpha = score
@@ -426,7 +464,7 @@ class Bot:
                     self.transpos_table[present_hash] = (score, self.MAX_DEPTH - depth)
                     if len(self.pv_move[present_hash]) == 0: self.pv_move[present_hash].append(move)
                     self.pv_move[present_hash].reverse()
-                    return score
+                    if depth > 0: return score
 
         self.pv_move[present_hash].reverse()
 
@@ -446,7 +484,7 @@ game = Game(is_human_turn=True)
 bot = Bot()
 
 
-board = chess.Board(fen = "8/8/3k4/8/4Q3/6N1/7K/5R2 w - - 3 41")
+board = chess.Board(fen="2k4q/P7/8/8/4K3/8/8/5Q2 w - - 1 56")
 move_visited = 0
 present_score = bot.get_score(board)
 bot.init_zobrist()
