@@ -410,7 +410,8 @@ class Bot:
             if value[1] >= self.MAX_DEPTH - depth:
                 hit = hit + 1
                 if depth == 0:
-                    return self.pv_move[present_hash][0][2]
+                    if len(self.pv_move[present_hash]) > 0:
+                        if self.pv_move[present_hash][0] is tuple: return self.pv_move[present_hash][0][2]
                 else:
                     return value[0]
             else:
@@ -492,8 +493,9 @@ game = Game(is_human_turn=True)
 bot = Bot()
 
 
-board = chess.Board(fen="8/2Q5/k2K4/8/8/8/8/8 w - - 3 70")
+board = chess.Board(fen = "6k1/p1Q5/5R1p/4r1p1/1p6/3P4/P2K1PPP/8 w - - 3 34")
 # 2k4q/P7/8/8/4K3/8/8/5Q2 w - - 1 56
+# fen="8/2Q5/k2K4/8/8/8/8/8 w - - 3 70"
 move_visited = 0
 present_score = bot.get_score(board)
 bot.init_zobrist()
