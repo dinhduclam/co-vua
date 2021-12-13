@@ -4,4 +4,5 @@ dist/*
 venv/*
 __pycache__/*
 .idea/
+backup.py
 !README.md
