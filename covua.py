@@ -493,7 +493,7 @@ game = Game(is_human_turn=True)
 bot = Bot()
 
 
-board = chess.Board(fen = "6k1/p1Q5/5R1p/4r1p1/1p6/3P4/P2K1PPP/8 w - - 3 34")
+board = chess.Board()
 # 2k4q/P7/8/8/4K3/8/8/5Q2 w - - 1 56
 # fen="8/2Q5/k2K4/8/8/8/8/8 w - - 3 70"
 move_visited = 0
