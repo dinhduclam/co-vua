@@ -367,7 +367,6 @@ class Bot:
         prev_distance = abs(x_from - x_king) + abs(y_from - y_king)
         distance = abs(x_to - x_king) + abs(y_to - y_king)
         if piece_at_from_square.color == True: value = 6
-
         else: value = -6
         return  (prev_distance - distance)*value - self.get_piece_score_without_position(piece_at_to_square)
 
@@ -476,7 +475,6 @@ class Bot:
                     self.transpos_table[present_hash] = (score, self.MAX_DEPTH - depth)
                     if len(self.pv_move[present_hash]) == 0: self.pv_move[present_hash].append(move)
                     self.pv_move[present_hash].reverse()
-                    print("SSSS: ", temp_score)
                     if depth > 0: return score
             else:
                 if score > alpha:
@@ -512,8 +510,8 @@ board = chess.Board()
 
 human_first = True
 
-if (human_first == False):
-    board.push_san("e4")
+# if (human_first == False):
+#     board.push_san("e4")
 
 move_visited = 0
 present_score = bot.get_score(board)
