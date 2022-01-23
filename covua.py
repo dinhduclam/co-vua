@@ -338,6 +338,23 @@ class Bot:
         to_square = move.to_square
         piece_at_from_square = board.piece_at(from_square)
         piece_at_to_square = board.piece_at(to_square)
+        x_from = int(from_square / 8)
+        y_from = from_square % 8
+        x_to = int(to_square / 8)
+        y_to = to_square % 8
+        if (board.piece_type_at(from_square) == chess.PAWN):
+            try:
+                score = (x_to - x_from) * 15;
+                if x_from in game.PROMOTE_RANK:
+                    if piece_at_from_square.color == True:
+                        score += 50
+                    else:
+                        score -= 50
+                if (move.promotion == 5): score *= 2
+                return score
+            except:
+                return 10
+
         king_pos = 0
         for i in range(64):
             if board.piece_type_at(i) == chess.KING:
@@ -345,17 +362,14 @@ class Bot:
                     king_pos = i
                     break
 
-        x_from = int(from_square/8)
-        y_from = from_square%8
-        x_to = int(to_square/8)
-        y_to = to_square % 8
         x_king = int(king_pos/8)
         y_king = king_pos%8
-        prev_score = abs(x_from - x_king) + abs(y_from - y_king)
-        score = abs(x_to - x_king) + abs(y_to - y_king)
-        if piece_at_from_square.color == True: value = 300
-        else: value = -300
-        return int((14 - (score - prev_score))*value/14) - self.get_piece_score_without_position(piece_at_to_square)
+        prev_distance = abs(x_from - x_king) + abs(y_from - y_king)
+        distance = abs(x_to - x_king) + abs(y_to - y_king)
+        if piece_at_from_square.color == True: value = 6
+
+        else: value = -6
+        return  (prev_distance - distance)*value - self.get_piece_score_without_position(piece_at_to_square)
 
     def get_score(self, board):
         score = 0
@@ -366,11 +380,10 @@ class Bot:
         return score
 
     def iterative_deepening(self):
+        global human_first
         max_depth = 4
         if game.calc_piece_quantity() < 7:
             cf.piece_position_score['k'] = cf.piece_position_score['k_e']
-
-        if game.calc_piece_quantity() < 5:
             self.calculate_score = self.calculate_score_last_game
         else:
             self.calculate_score = self.calculate_score_normal
@@ -379,7 +392,7 @@ class Bot:
 
         for depth in range(2, max_depth+1):
             self.MAX_DEPTH = depth
-            best_move = self.minimax(0, -800011, 800011, isMaxPlayer=False)
+            best_move = self.minimax(0, -800011, 800011, isMaxPlayer= not human_first)
 
         end = timeit.default_timer()
         print("Time: ", end - start)
@@ -463,6 +476,7 @@ class Bot:
                     self.transpos_table[present_hash] = (score, self.MAX_DEPTH - depth)
                     if len(self.pv_move[present_hash]) == 0: self.pv_move[present_hash].append(move)
                     self.pv_move[present_hash].reverse()
+                    print("SSSS: ", temp_score)
                     if depth > 0: return score
             else:
                 if score > alpha:
@@ -477,7 +491,8 @@ class Bot:
 
         self.pv_move[present_hash].reverse()
 
-        if depth == 0: return best_move
+        if depth == 0:
+            return best_move
         if isMaxPlayer:
             self.transpos_table[present_hash] = (alpha, self.MAX_DEPTH - depth)
             return alpha
@@ -487,15 +502,19 @@ class Bot:
 
     calculate_score = calculate_score_normal
 
+
 #MAIN
 gui = GUI()
 game = Game(is_human_turn=True)
 bot = Bot()
 
+board = chess.Board(fen = '8/8/3k1r2/8/3K4/8/8/6B1 w - - 0 1')
 
-board = chess.Board()
-# 2k4q/P7/8/8/4K3/8/8/5Q2 w - - 1 56
-# fen="8/2Q5/k2K4/8/8/8/8/8 w - - 3 70"
+human_first = True
+
+if (human_first == False):
+    board.push_san("e4")
+
 move_visited = 0
 present_score = bot.get_score(board)
 bot.init_zobrist()
