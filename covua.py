@@ -508,7 +508,7 @@ gui = GUI()
 game = Game(is_human_turn=True)
 bot = Bot()
 
-board = chess.Board(fen = '8/8/3k1r2/8/3K4/8/8/6B1 w - - 0 1')
+board = chess.Board()
 
 human_first = True
 
