@@ -6,6 +6,5 @@ Lớp: 126523
 <br>
 <br>
 **Chạy chương trình:**
-<br>
-1. Cài các gói trong requirement.txt: pip install -r requirement.txt <br>
+1. Cài các gói trong requirement.txt: _pip install -r requirement.txt_ <br>
 2. Chạy file covua.py
