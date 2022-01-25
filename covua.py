@@ -510,8 +510,8 @@ board = chess.Board()
 
 human_first = True
 
-# if (human_first == False):
-#     board.push_san("e4")
+if (human_first == False):
+    board.push_san("e4")
 
 move_visited = 0
 present_score = bot.get_score(board)
